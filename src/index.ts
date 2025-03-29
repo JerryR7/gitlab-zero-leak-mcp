@@ -46,9 +46,33 @@ import {
   type FileOperation,
 } from './schemas.js';
 
+// 安全配置處理
+const disabledHandlers = (process.env.DISABLED_HANDLERS || '')
+  .split(',')
+  .map(x => x.trim())
+  .filter(Boolean);
+
+const allowedReadProjects = (process.env.ALLOWED_READ_PROJECTS || '')
+  .split(',')
+  .map(x => x.trim())
+  .filter(Boolean);
+
+// 添加審計日誌功能
+function logAudit(operation: string, projectId: string | undefined, allowed: boolean, reason?: string) {
+  const timestamp = new Date().toISOString();
+  const logEntry = {
+    timestamp,
+    operation,
+    projectId: projectId || 'unknown',
+    allowed,
+    reason
+  };
+  console.error(`[AUDIT] ${JSON.stringify(logEntry)}`);
+}
+
 const server = new Server({
-  name: "gitlab-mcp-server",
-  version: "0.5.1",
+  name: "gitlab-zero-leak-mcp-server",
+  version: "1.0.0",
 }, {
   capabilities: {
     tools: {}
@@ -62,6 +86,11 @@ if (!GITLAB_PERSONAL_ACCESS_TOKEN) {
   console.error("GITLAB_PERSONAL_ACCESS_TOKEN environment variable is not set");
   process.exit(1);
 }
+
+// 顯示安全配置信息
+console.error(`[CONFIG] Disabled handlers: ${disabledHandlers.length > 0 ? disabledHandlers.join(', ') : 'None'}`);
+console.error(`[CONFIG] Allowed read projects: ${allowedReadProjects.length > 0 ? allowedReadProjects.join(', ') : 'None'}`);
+console.error(`[CONFIG] GitLab API URL: ${GITLAB_API_URL}`);
 
 async function forkProject(
   projectId: string,
@@ -79,7 +108,8 @@ async function forkProject(
   });
 
   if (!response.ok) {
-    throw new Error(`GitLab API error: ${response.statusText}`);
+    const errorText = await response.text();
+    throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${errorText}`);
   }
 
   return GitLabForkSchema.parse(await response.json());
@@ -105,7 +135,13 @@ async function createBranch(
   );
 
   if (!response.ok) {
-    throw new Error(`GitLab API error: ${response.statusText}`);
+    try {
+      const errorBody = await response.json();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${JSON.stringify(errorBody)}`);
+    } catch (parseError) {
+      const errorText = await response.text();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${errorText}`);
+    }
   }
 
   return GitLabReferenceSchema.parse(await response.json());
@@ -122,7 +158,13 @@ async function getDefaultBranchRef(projectId: string): Promise<string> {
   );
 
   if (!response.ok) {
-    throw new Error(`GitLab API error: ${response.statusText}`);
+    try {
+      const errorBody = await response.json();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${JSON.stringify(errorBody)}`);
+    } catch (parseError) {
+      const errorText = await response.text();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${errorText}`);
+    }
   }
 
   const project = GitLabRepositorySchema.parse(await response.json());
@@ -147,7 +189,13 @@ async function getFileContents(
   });
 
   if (!response.ok) {
-    throw new Error(`GitLab API error: ${response.statusText}`);
+    try {
+      const errorBody = await response.json();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${JSON.stringify(errorBody)}`);
+    } catch (parseError) {
+      const errorText = await response.text();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${errorText}`);
+    }
   }
 
   const data = GitLabContentSchema.parse(await response.json());
@@ -182,7 +230,13 @@ async function createIssue(
   );
 
   if (!response.ok) {
-    throw new Error(`GitLab API error: ${response.statusText}`);
+    try {
+      const errorBody = await response.json();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${JSON.stringify(errorBody)}`);
+    } catch (parseError) {
+      const errorText = await response.text();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${errorText}`);
+    }
   }
 
   return GitLabIssueSchema.parse(await response.json());
@@ -212,7 +266,13 @@ async function createMergeRequest(
   );
 
   if (!response.ok) {
-    throw new Error(`GitLab API error: ${response.statusText}`);
+    try {
+      const errorBody = await response.json();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${JSON.stringify(errorBody)}`);
+    } catch (parseError) {
+      const errorText = await response.text();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${errorText}`);
+    }
   }
 
   return GitLabMergeRequestSchema.parse(await response.json());
@@ -255,12 +315,20 @@ async function createOrUpdateFile(
   });
 
   if (!response.ok) {
-    throw new Error(`GitLab API error: ${response.statusText}`);
+    try {
+      const errorBody = await response.json();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${JSON.stringify(errorBody)}`);
+    } catch (parseError) {
+      const errorText = await response.text();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${errorText}`);
+    }
   }
 
   return GitLabCreateUpdateFileResponseSchema.parse(await response.json());
 }
 
+// 未使用的函數，但保留以供將來使用
+// @ts-ignore
 async function createTree(
   projectId: string,
   files: FileOperation[],
@@ -285,7 +353,13 @@ async function createTree(
   );
 
   if (!response.ok) {
-    throw new Error(`GitLab API error: ${response.statusText}`);
+    try {
+      const errorBody = await response.json();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${JSON.stringify(errorBody)}`);
+    } catch (parseError) {
+      const errorText = await response.text();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${errorText}`);
+    }
   }
 
   return GitLabTreeSchema.parse(await response.json());
@@ -318,7 +392,13 @@ async function createCommit(
   );
 
   if (!response.ok) {
-    throw new Error(`GitLab API error: ${response.statusText}`);
+    try {
+      const errorBody = await response.json();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${JSON.stringify(errorBody)}`);
+    } catch (parseError) {
+      const errorText = await response.text();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${errorText}`);
+    }
   }
 
   return GitLabCommitSchema.parse(await response.json());
@@ -341,7 +421,13 @@ async function searchProjects(
   });
 
   if (!response.ok) {
-    throw new Error(`GitLab API error: ${response.statusText}`);
+    try {
+      const errorBody = await response.json();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${JSON.stringify(errorBody)}`);
+    } catch (parseError) {
+      const errorText = await response.text();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${errorText}`);
+    }
   }
 
   const projects = await response.json();
@@ -369,86 +455,107 @@ async function createRepository(
   });
 
   if (!response.ok) {
-    throw new Error(`GitLab API error: ${response.statusText}`);
+    try {
+      const errorBody = await response.json();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${JSON.stringify(errorBody)}`);
+    } catch (parseError) {
+      const errorText = await response.text();
+      throw new Error(`GitLab API error: ${response.statusText} (${response.status}) - ${errorText}`);
+    }
   }
 
   return GitLabRepositorySchema.parse(await response.json());
 }
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
+  // 根據禁用的 handlers 過濾工具列表
+  const allTools = [
+    {
+      name: "create_or_update_file",
+      description: "Create or update a single file in a GitLab project",
+      inputSchema: zodToJsonSchema(CreateOrUpdateFileSchema)
+    },
+    {
+      name: "search_repositories",
+      description: "Search for GitLab projects",
+      inputSchema: zodToJsonSchema(SearchRepositoriesSchema)
+    },
+    {
+      name: "create_repository",
+      description: "Create a new GitLab project",
+      inputSchema: zodToJsonSchema(CreateRepositorySchema)
+    },
+    {
+      name: "get_file_contents",
+      description: "Get the contents of a file or directory from a GitLab project",
+      inputSchema: zodToJsonSchema(GetFileContentsSchema)
+    },
+    {
+      name: "push_files",
+      description: "Push multiple files to a GitLab project in a single commit",
+      inputSchema: zodToJsonSchema(PushFilesSchema)
+    },
+    {
+      name: "create_issue",
+      description: "Create a new issue in a GitLab project",
+      inputSchema: zodToJsonSchema(CreateIssueSchema)
+    },
+    {
+      name: "create_merge_request",
+      description: "Create a new merge request in a GitLab project",
+      inputSchema: zodToJsonSchema(CreateMergeRequestSchema)
+    },
+    {
+      name: "fork_repository",
+      description: "Fork a GitLab project to your account or specified namespace",
+      inputSchema: zodToJsonSchema(ForkRepositorySchema)
+    },
+    {
+      name: "create_branch",
+      description: "Create a new branch in a GitLab project",
+      inputSchema: zodToJsonSchema(CreateBranchSchema)
+    }
+  ];
+
+  const availableTools = allTools.filter(tool => !disabledHandlers.includes(tool.name));
+  
   return {
-    tools: [
-      {
-        name: "create_or_update_file",
-        description: "Create or update a single file in a GitLab project",
-        inputSchema: zodToJsonSchema(CreateOrUpdateFileSchema)
-      },
-      {
-        name: "search_repositories",
-        description: "Search for GitLab projects",
-        inputSchema: zodToJsonSchema(SearchRepositoriesSchema)
-      },
-      {
-        name: "create_repository",
-        description: "Create a new GitLab project",
-        inputSchema: zodToJsonSchema(CreateRepositorySchema)
-      },
-      {
-        name: "get_file_contents",
-        description: "Get the contents of a file or directory from a GitLab project",
-        inputSchema: zodToJsonSchema(GetFileContentsSchema)
-      },
-      {
-        name: "push_files",
-        description: "Push multiple files to a GitLab project in a single commit",
-        inputSchema: zodToJsonSchema(PushFilesSchema)
-      },
-      {
-        name: "create_issue",
-        description: "Create a new issue in a GitLab project",
-        inputSchema: zodToJsonSchema(CreateIssueSchema)
-      },
-      {
-        name: "create_merge_request",
-        description: "Create a new merge request in a GitLab project",
-        inputSchema: zodToJsonSchema(CreateMergeRequestSchema)
-      },
-      {
-        name: "fork_repository",
-        description: "Fork a GitLab project to your account or specified namespace",
-        inputSchema: zodToJsonSchema(ForkRepositorySchema)
-      },
-      {
-        name: "create_branch",
-        description: "Create a new branch in a GitLab project",
-        inputSchema: zodToJsonSchema(CreateBranchSchema)
-      }
-    ]
+    tools: availableTools
   };
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     if (!request.params.arguments) {
+      logAudit(request.params.name, undefined, false, 'Missing arguments');
       throw new Error("Arguments are required");
     }
 
-    const disabledHandlers = (process.env.DISABLED_HANDLERS || '').split(',').map(x => x.trim());
-    const allowedReadProjects = (process.env.ALLOWED_READ_PROJECTS || '').split(',').map(x => x.trim());
-
     const opName = request.params.name;
     const args = request.params.arguments;
+    // 安全地存取 project_id，處理可能的類型問題
+    const projectId = typeof args === 'object' && args !== null && 'project_id' in args 
+      ? String(args.project_id) 
+      : undefined;
 
-    // check if handler is disabled
+    // 檢查 handler 是否被禁用
     if (disabledHandlers.includes(opName)) {
+      logAudit(opName, projectId, false, 'Operation disabled by policy');
       throw new Error(`Tool "${opName}" is disabled by server policy.`);
     }
 
-    // check if  project not in whitelist
+    // 檢查項目是否在白名單中（對於讀取操作）
     const readOps = ['get_file_contents'];
-    if (readOps.includes(opName) && args?.project_id && !allowedReadProjects.includes(args.project_id)) {
-      throw new Error(`Project "${args.project_id}" is not allowed for read operations.`);
+    if (readOps.includes(opName) && projectId) {
+      if (!allowedReadProjects.includes(projectId)) {
+        logAudit(opName, projectId, false, 'Project not in allowlist');
+        throw new Error(`Project "${projectId}" is not allowed for read operations.`);
+      }
+      logAudit(opName, projectId, true, 'Project in allowlist');
     }
+
+    // 記錄執行操作
+    logAudit(opName, projectId, true, 'Operation permitted');
 
     switch (request.params.name) {
       case "fork_repository": {
@@ -529,23 +636,53 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       default:
+        logAudit(opName, projectId, false, 'Unknown tool');
         throw new Error(`Unknown tool: ${request.params.name}`);
     }
   } catch (error) {
+    // 統一錯誤處理
     if (error instanceof z.ZodError) {
-      throw new Error(`Invalid arguments: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`);
+      const errorMessage = `Invalid arguments: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`;
+      console.error(errorMessage);
+      throw new Error(errorMessage);
     }
+    
+    // 將 GitLab API 錯誤轉換為更清晰的錯誤消息
+    if (error instanceof Error) {
+      console.error(`Error: ${error.message}`);
+    } else {
+      console.error(`Unknown error: ${String(error)}`);
+    }
+    
     throw error;
   }
 });
 
 async function runServer() {
   const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("GitLab MCP Server running on stdio");
+  
+  try {
+    console.error("GitLab Zero-Leak MCP Server starting...");
+    await server.connect(transport);
+    console.error("GitLab Zero-Leak MCP Server running on stdio");
+  } catch (error) {
+    console.error("Failed to start server:", error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+
+  // 處理進程退出
+  process.on('SIGTERM', () => {
+    console.error("Server shutting down (SIGTERM)");
+    process.exit(0);
+  });
+
+  process.on('SIGINT', () => {
+    console.error("Server shutting down (SIGINT)");
+    process.exit(0);
+  });
 }
 
 runServer().catch((error) => {
-  console.error("Fatal error in main():", error);
+  console.error("Fatal error in main():", error instanceof Error ? error.message : String(error));
   process.exit(1);
 });
