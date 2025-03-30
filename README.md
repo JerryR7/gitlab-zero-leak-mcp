@@ -18,15 +18,17 @@ A security-hardened GitLab API MCP Server with zero source code leakage risk. Bu
 
 ## Architecture
 
+### Standard Setup (Local MCP)
 ```
 Claude Desktop
      |
      v
- GitLab MCP Server (Zero-Leak)
+ GitLab Zero-Leak MCP Server (Local)
      |
      v
  GitLab API (self-hosted)
 ```
+
 ## Tools
 
 1. `create_or_update_file`
@@ -115,9 +117,30 @@ Claude Desktop
 
 ## Getting Started
 
-1. Clone this repository
-2. Create a `.env` file based on `.env.example`
+
+### Local Deployment
+
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/yourusername/gitlab-zero-leak-mcp.git
+   cd gitlab-zero-leak-mcp
+   ```
+
+2. Create a `.env` file based on `.env.example`:
+   ```bash
+   cat > .env << EOF
+   GITLAB_PERSONAL_ACCESS_TOKEN=your_token_here
+   GITLAB_API_URL=https://gitlab.com/api/v4
+   DISABLED_HANDLERS=get_file_contents
+   ALLOWED_READ_PROJECTS=your-group/public-repo
+   EOF
+   ```
+
 3. Run MCP Server using Docker:
+   ```bash
+   docker build -t gitlab-zero-leak-mcp .
+   docker run -i --env-file .env gitlab-zero-leak-mcp
+   ```
 
 ## Setup
 
@@ -127,10 +150,12 @@ Claude Desktop
    - Select the required scopes:
      - `api` for full API access
      - `read_api` for read-only access
-     - `read_repository` and `write_repository` for repository operations
+     - `write_repository` for repository operations
+     - Avoid `read_repository` when possible for maximum security
    - Create the token and save it securely
 
 ### Usage with Claude Desktop
+
 Add the following to your `claude_desktop_config.json`:
 
 #### Docker
@@ -186,20 +211,36 @@ Add the following to your `claude_desktop_config.json`:
 
 ### Using Docker Compose
 
-1. Create a `.env` file based on `.env.example`:
-```
-GITLAB_PERSONAL_ACCESS_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
-GITLAB_API_URL=https://gitlab.com/api/v4
+1. Create a `docker-compose.yml` file:
+   ```yaml
+   version: '3'
+   
+   services:
+     gitlab-mcp:
+       build: .
+       container_name: gitlab-zero-leak-mcp
+       restart: always
+       env_file:
+         - .env
+       ports:
+         - "127.0.0.1:8081:3000"  # Only expose to localhost by default
+       user: "node"  # Run as non-root user
+   ```
 
-# Zero-Leak
-DISABLED_HANDLERS=get_file_contents
-ALLOWED_READ_PROJECTS=my-group/public-repo
-```
+2. Create a `.env` file based on `.env.example`:
+   ```
+   GITLAB_PERSONAL_ACCESS_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
+   GITLAB_API_URL=https://gitlab.com/api/v4
+   
+   # Zero-Leak
+   DISABLED_HANDLERS=get_file_contents
+   ALLOWED_READ_PROJECTS=my-group/public-repo
+   ```
 
-2. Run with Docker Compose:
-```bash
-docker-compose up -d
-```
+3. Run with Docker Compose:
+   ```bash
+   docker-compose up -d
+   ```
 
 ### Manual Docker Build
 
@@ -227,14 +268,18 @@ docker run -i --env-file .env gitlab-zero-leak-mcp
 | Leaked GitLab token or misuse          | `.env` excluded from version control; recommend least-privilege tokens     |
 | External access to MCP Server          | Docker binds only to internal IP (e.g., 192.168.x.x); not exposed publicly |
 | Elevated privileges in container       | Dockerfile runs as non-root user                                          |
+| Using standard MCP server              | Server-side deployment restricts all MCP access through Zero-Leak instance |
+| Misconfigured API tokens               | Recommend tokens without `read_repository` permission                      |
 
 ### Recommended Practices
 
-- Only run within secured network (e.g., LAN/VPN)
-- Use firewalls to limit access to MCP port (8081)
+- Use tokens without `read_repository` permission
+- Always set `DISABLED_HANDLERS=get_file_contents`
+- Carefully manage your `ALLOWED_READ_PROJECTS` list
 - Never commit `.env` files to version control
 - Use token scopes that exclude admin-level privileges
-- Optional: add audit logging in `index.ts` to trace usage
+- Regularly review audit logs for unauthorized access attempts
+- Periodically review and rotate API tokens
 
 ## Testing
 
@@ -256,8 +301,45 @@ echo '{"id":"3","method":"callTool","params":{"name":"search_repositories","argu
 # Should return search results
 ```
 
+## Troubleshooting
+
+### Common Issues
+
+1. **Authentication Errors**
+   - Verify your Personal Access Token is valid and has appropriate permissions
+   - Check for typos in the token
+
+2. **Missing Tools**
+   - If tools are missing from the listTools response, verify your `DISABLED_HANDLERS` setting
+
+3. **Permission Denied**
+   - Ensure your token has the necessary permissions for the operation
+   - Check that projects needing read access are in the `ALLOWED_READ_PROJECTS` list
+
+### Logs
+
+- View Docker logs:
+  ```bash
+  docker logs gitlab-zero-leak-mcp
+  ```
+
+- Check for audit log entries:
+  ```bash
+  docker logs gitlab-zero-leak-mcp | grep "[AUDIT]"
+  ```
+
 ## Security Model
-See [SECURITY.md](./SECURITY.md)
+See [SECURITY.md](./SECURITY.md) for more detailed security information.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
