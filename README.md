@@ -168,18 +168,12 @@ Add the following to your `claude_desktop_config.json`:
         "run",
         "--rm",
         "-i",
-        "-e", "GITLAB_PERSONAL_ACCESS_TOKEN",
-        "-e", "GITLAB_API_URL",
-        "-e", "DISABLED_HANDLERS",
-        "-e", "ALLOWED_READ_PROJECTS",
+        "-e", "GITLAB_PERSONAL_ACCESS_TOKEN=<YOUR_TOKEN>",
+        "-e", "GITLAB_API_URL=https://gitlab.com/api/v4",
+        "-e", "DISABLED_HANDLERS=get_file_contents",
+        "-e", "ALLOWED_READ_PROJECTS=your-org/public-repo,your-org/docs-repo",
         "gitlab-zero-leak-mcp"
-      ],
-      "env": {
-        "GITLAB_PERSONAL_ACCESS_TOKEN": "<YOUR_TOKEN>",
-        "GITLAB_API_URL": "https://gitlab.com/api/v4",
-        "DISABLED_HANDLERS": "get_file_contents",
-        "ALLOWED_READ_PROJECTS": "your-org/public-repo,your-org/docs-repo"
-      }
+      ]
     }
   }
 }
